@@ -1,0 +1,218 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1504\cocoasubrtf820
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Pig Script\
+\
+crime = LOAD 'Police_Incidents3.txt' USING PigStorage ('\\t') AS (year:int, zip:int, Zdate:chararray, Zmonth:chararray, Ztime:chararray, family:chararray, hate:chararray, gang:chararray, drug:chararray);\
+crime = FOREACH crime GENERATE year, zip, Zdate, Zmonth, Ztime, (\
+  CASE\
+      WHEN family == 'Yes' THEN '1'\
+      WHEN family == 'No' THEN '0'\
+      WHEN family == '-9999' THEN '0'\
+      WHEN family == 'UNK' THEN '0'\
+  END) as family,(\
+  CASE\
+      WHEN hate == 'Yes' THEN '1'\
+      WHEN hate == 'No' THEN '0'\
+      WHEN hate == '-9999' THEN '0'\
+      WHEN hate == 'UNK' THEN '0' \
+  END) as hate,(\
+  CASE\
+      WHEN gang == 'Yes' THEN '1'\
+      WHEN gang == 'No' THEN '0'\
+      WHEN gang == '-9999' THEN '0'\
+      WHEN gang == 'UNK' THEN '0' \
+  END) as gang, (\
+  CASE\
+      WHEN drug == 'Yes' THEN '1'\
+      WHEN drug == 'No' THEN '0'\
+      WHEN drug == '-9999' THEN '0'\
+      WHEN drug == 'UNK' THEN '0' \
+  END) as drug;  \
+crime_1 = FOREACH crime GENERATE year, zip, Zmonth, family, hate, gang, drug;\
+crime_2 = FOREACH crime_1 GENERATE year, zip, Zmonth, (int)family, (int)hate, (int)gang, (int)drug;\
+STORE crime_2 INTO '/apps/hive/warehouse/crime_pig1';\
+\
+crime_limit = LIMIT crime 10;\
+dump crime_limit;\
+\
+Bash \
+\
+crime$ hdfs dfs -get /apps/hive/warehouse/crime_pig1/part-m-00000\
+crime$ mv part-m-00000 crime1.txt\
+\
+Hive Script\
+\
+drop table crime; CREATE TABLE crime (year int, zip int, Zmonth string, family int, hate int, gang int, drug int) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\\t' STORED AS TEXTFILE; LOAD DATA LOCAL INPATH 'crime1.txt' OVERWRITE INTO TABLE crime;\
+\
+drop table income15; create table income15 (year int, zip int, income int) row format delimited fields terminated by ','; LOAD DATA LOCAL INPATH 'incbyzip15.csv' OVERWRITE INTO TABLE income15;\
+drop table income14; create table income14 (year int, zip int, income int) row format delimited fields terminated by ','; LOAD DATA LOCAL INPATH 'incbyzip14.csv' OVERWRITE INTO TABLE income14;\
+drop table income13; create table income13 (year int, zip int, income int) row format delimited fields terminated by ','; LOAD DATA LOCAL INPATH 'incbyzip13.csv' OVERWRITE INTO TABLE income13;\
+drop table income12; create table income12 (year int, zip int, income int) row format delimited fields terminated by ','; LOAD DATA LOCAL INPATH 'incbyzip12.csv' OVERWRITE INTO TABLE income12;\
+drop table income11; create table income11 (year int, zip int, income int) row format delimited fields terminated by ','; LOAD DATA LOCAL INPATH 'incbyzip11.csv' OVERWRITE INTO TABLE income11;\
+\
+drop view crime_inc11; create view crime_inc11 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income11.income from crime join income11 on (crime.year = income11.year AND crime.zip = income11.zip);\
+drop view crime_inc12; create view crime_inc12 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income12.income from crime join income12 on (crime.year = income12.year AND crime.zip = income12.zip);\
+drop view crime_inc13; create view crime_inc13 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income13.income from crime join income13 on (crime.year = income13.year AND crime.zip = income13.zip);\
+drop view crime_inc14; create view crime_inc14 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income14.income from crime join income14 on (crime.year = income14.year AND crime.zip = income14.zip);\
+drop view crime_inc15; create view crime_inc15 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income15.income from crime join income15 on (crime.year = income15.year AND crime.zip = income15.zip);\
+drop view crime_inc16; create view crime_inc16 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income15.income from crime join income15 on (crime.zip = income15.zip) WHERE crime.year = 2016;\
+drop view crime_inc17; create view crime_inc17 as select crime.year, crime.zip, crime.Zmonth, crime.family, crime.hate, crime.gang, crime.drug, income15.income from crime join income15 on (crime.zip = income15.zip) WHERE crime.year = 2017;\
+drop view crime_inc; create view crime_inc as select * from crime_inc11 union select * from crime_inc12 union select * from crime_inc13 union select * from crime_inc14 union select * from crime_inc15 union select * from crime_inc16 union select * from crime_inc17;\
+\
+Pig Script\
+\
+crime = LOAD 'crime_inc.txt' USING PigStorage ('\\t') AS (year:int, zip:int, Zmonth:chararray, family:int, hate:int, gang:int, drug:int, income:int);\
+family_pre = FOREACH crime GENERATE year, zip, family, income;\
+hate_pre = FOREACH crime GENERATE year, zip, hate, income;\
+gang_pre = FOREACH crime GENERATE year, zip, gang, income;\
+drug_pre = FOREACH crime GENERATE year, zip, drug, income;\
+\
+family_group = GROUP family_pre BY (year, zip, income);\
+fam_result = FOREACH family_group GENERATE group, SUM(family_pre.family) as sum_fam;\
+fam_result1 = FOREACH fam_result GENERATE group.year, group.zip, group.income, sum_fam;\
+family = fam_result1;\
+\
+hate_group = GROUP hate_pre BY (year, zip, income);\
+hate_result = FOREACH hate_group GENERATE group, SUM(hate_pre.hate) as sum_hate;\
+hate_result1 = FOREACH hate_result GENERATE group.year, group.zip, group.income, sum_hate;\
+hate = hate_result1;\
+\
+gang_group = GROUP gang_pre BY (year, zip, income);\
+gang_result = FOREACH gang_group GENERATE group, SUM(gang_pre.gang) as sum_gang;\
+gang_result1 = FOREACH gang_result GENERATE group.year, group.zip, group.income, sum_gang;\
+gang = gang_result1;\
+\
+drug_group = GROUP drug_pre BY (year, zip, income);\
+drug_result = FOREACH drug_group GENERATE group, SUM(drug_pre.drug) as sum_drug;\
+drug_result1 = FOREACH drug_result GENERATE group.year, group.zip, group.income, sum_drug;\
+drug = drug_result1;\
+\
+\
+Family Incidents:\
+\
+fam_Class = FOREACH family GENERATE year, zip, sum_fam, (\
+  CASE\
+      WHEN income <= 23300 THEN 'BOTTOM'\
+      WHEN income <= 39800 AND income > 23300 THEN 'POORM'\
+      WHEN income <= 56200 AND income > 39800 THEN 'MIDDLEM'\
+      WHEN income <= 72700 AND income > 56200 THEN 'UPPERM'\
+      WHEN income > 72700 THEN 'TOP20'\
+  END) AS class;\
+fam_Class = FOREACH fam_Class GENERATE year, zip, Zmonth, sum_fam, (chararray)class;\
+fam_Class_incid = FILTER fam_Class BY sum_fam > 0;\
+famByClass = GROUP fam_Class_incid BY (year, zip, class);\
+famByClass2 = FOREACH famByClass GENERATE group, COUNT(fam_Class_incid);\
+\
+Summary - No output.\
+\
+Conclusion - Nothing to output. So DPD must not make family-related incidents public.\
+\
+Hate-related incidents:\
+\
+hate_Class = FOREACH hate GENERATE year, zip, sum_hate, (\
+  CASE\
+      WHEN income <= 23300 THEN 'BOTTOM'\
+      WHEN income <= 39800 AND income > 23300 THEN 'POORM'\
+      WHEN income <= 56200 AND income > 39800 THEN 'MIDDLEM'\
+      WHEN income <= 72700 AND income > 56200 THEN 'UPPERM'\
+      WHEN income > 72700 THEN 'TOP20'\
+  END) AS class;\
+hate_Class = FOREACH hate_Class GENERATE year, zip, sum_gang, (chararray)class;\
+hate_Class_incid = FILTER hate_Class BY sum_hate > 0;\
+hate_group = GROUP hate_Class_incid BY (class, year);\
+result = FOREACH hate_group GENERATE group, SUM(hate_Class_incid.sum_hate);\
+dump result;\
+\
+Summary:\
+\
+((POORM,2015),4)\
+((POORM,2016),6)\
+((POORM,2017),1)\
+((TOP20,2015),1)\
+((TOP20,2016),4)\
+((UPPERM,2015),1)\
+((UPPERM,2016),5)\
+((UPPERM,2017),1)\
+((MIDDLEM,2016),2)\
+((MIDDLEM,2017),1)\
+\
+Conclusion: \
+\
+\
+Gang-related incidents:\
+\
+gang_Class = FOREACH gang GENERATE year, zip, sum_gang, (\
+  CASE\
+      WHEN income <= 23300 THEN 'BOTTOM'\
+      WHEN income <= 39800 AND income > 23300 THEN 'POORM'\
+      WHEN income <= 56200 AND income > 39800 THEN 'MIDDLEM'\
+      WHEN income <= 72700 AND income > 56200 THEN 'UPPERM'\
+      WHEN income > 72700 THEN 'TOP20'\
+  END) AS class;\
+gang_Class = FOREACH gang_Class GENERATE year, zip, Zmonth, sum_gang, (chararray)class;\
+gang_Class_incid = FILTER gang_Class BY sum_gang > 0;\
+\
+gang_group = GROUP gang_Class_incid BY (class, year);\
+result = FOREACH gang_group GENERATE group, SUM(gang_Class_incid.sum_gang);\
+dump result;\
+\
+Summary:\
+\
+((POORM,2015),79)\
+((POORM,2016),101)\
+((POORM,2017),34)\
+((TOP20,2015),13)\
+((TOP20,2016),18)\
+((TOP20,2017),4)\
+((BOTTOM,2015),5)\
+((BOTTOM,2016),8)\
+((BOTTOM,2017),2)\
+((UPPERM,2015),10)\
+((UPPERM,2016),14)\
+((UPPERM,2017),1)\
+((MIDDLEM,2015),26)\
+((MIDDLEM,2016),27)\
+((MIDDLEM,2017),3)\
+\
+Conclusion - The poor, middle-class have the most gang-related incidents.\
+\
+Drug-related incidents:\
+\
+drug_Class = FOREACH drug GENERATE year, zip, sum_drug, (\
+  CASE\
+      WHEN income <= 23300 THEN 'BOTTOM'\
+      WHEN income <= 39800 AND income > 23300 THEN 'POORM'\
+      WHEN income <= 56200 AND income > 39800 THEN 'MIDDLEM'\
+      WHEN income <= 72700 AND income > 56200 THEN 'UPPERM'\
+      WHEN income > 72700 THEN 'TOP20'\
+  END) AS class;\
+drug_Class = FOREACH drug_Class GENERATE year, zip, sum_drug, (chararray)class;\
+drug_Class_incid = FILTER drug_Class BY sum_drug > 0;\
+drug_group = GROUP drug_Class_incid BY (class, year);\
+drug_result = FOREACH drug_group GENERATE group, SUM(drug_Class_incid.sum_drug);\
+dump drug_result;\
+\
+Summary:\
+\
+((POORM,2015),174)\
+((POORM,2016),238)\
+((POORM,2017),67)\
+((TOP20,2015),53)\
+((TOP20,2016),75)\
+((TOP20,2017),20)\
+((BOTTOM,2015),18)\
+((BOTTOM,2016),19)\
+((BOTTOM,2017),7)\
+((UPPERM,2015),35)\
+((UPPERM,2016),50)\
+((UPPERM,2017),16)\
+((MIDDLEM,2015),65)\
+((MIDDLEM,2016),89)\
+((MIDDLEM,2017),22)\
+\
+Conclusion - The poor, middle-class have the most drug-related incidents.}
